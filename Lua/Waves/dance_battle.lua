@@ -1,12 +1,93 @@
 require "better_variables"
 
+-- Global effects
 effects = {}
+-- Global bullets
 bullets = {}
 
 -- Song related
 bpm = 225
-fps = 30
+fps = 60
 song_end_beat = 208
+time_offset = 0.15
+
+-- Global notes
+notes = {}
+-- Each note should have a function named `create_bullets` 
+-- and it is executed at the first frame when current_beat > note.beat 
+
+function distance(p1, p2)
+    --- Calculate distance of two points p1, p2
+    -- assummes p1.x, p1.y, p2.x, p2.y exists.
+    return math.sqrt((p1.x-p2.x) * (p1.x-p2.x) + (p1.y-p2.y) * (p1.y-p2.y))
+end
+
+
+function generate_linear_bullet_note(beat, start_x, start_y, radius, sprite_name, beat_until_collision) 
+    --- Linear Bullet Note
+    -- Generates a bullet with start position `(start_x, start_y)`
+    -- heading to `(player.x, player.y)`
+    -- after beat_until_collision, bullet should be right in front of `(player.x, player.y)`
+    -- to be percise, `distance(player, bullet)` should be `grace_distance`
+
+    -- set defaults
+    radius = radius or 4
+    sprite_name = sprite_name or 'bullet_circle'
+    beat_until_collision = beat_until_collision or 4
+    grace_distance = 25
+
+
+    -- generate note
+    note = {}
+    note.beat = beat
+    note.beat_until_collision = beat_until_collision
+    note.start_beat = note.beat - beat_until_collision
+    note.create_bullets = function()
+        -- calculate the goal point
+        start = {x=start_x, y=start_y}
+        d = grace_distance
+        s = distance(start, player)
+        goal = {
+            x = ((s-d) * player.x + d * start.x) / s,
+            y = ((s-d) * player.y + d * start.y) / s
+        }
+
+        bullet = create_bullet(sprite_name, start_x, start_y)
+        time_until_collision = beat_until_collision * 60 / bpm
+        bullet.vx = (goal.x - bullet.x) / time_until_collision / fps
+        bullet.vy = (goal.y - bullet.y) / time_until_collision / fps
+        bullet.r = radius
+        bullet.update = function(self)
+            self.Move(self.vx or 0, self.vy or 0)
+        end
+        table.insert(bullets, bullet)
+    end
+    return note
+end
+
+function generate_notes()
+    r = 300
+    for i, n in ipairs({32, 34, 36, 38, 40, 42, 44, 46, 
+                        48, 50, 52, 54, 56, 58, 60, 62,
+                        64, 66, 68, 70, 72, 74, 76, 78,
+                        80, 82, 84, 86, 88, 90, 92, 94,
+                        96, 98, 100, 102, 104, 106, 108, 110, 
+                        112, 114, 116, 118, 120, 122, 124, 126, 
+                        128, 129.5, 132, 133.5, 136, 138, 140, 142,
+                        144, 145.5, 148, 149.5, 152, 153, 154, 154 + 2/3, 154 + 4/3, 156, 158, 
+                        160, 161.5, 164, 165.5, 168, 170, 172, 174, 
+                        176, 177.5, 180, 181.5, 184, 185, 186, 186 + 2/3, 186 + 4/3, 188, 190, 
+                        }) do
+        theta = math.random() * math.pi
+        table.insert(notes, generate_linear_bullet_note(n, r * math.cos(theta), r * math.sin(theta)))
+        table.insert(notes, generate_linear_bullet_note(n, r * math.cos(math.pi + theta), r * math.sin(math.pi + theta)))
+        if n >= 128 then
+            table.insert(notes, generate_linear_bullet_note(n, r * math.cos(math.pi / 2 +theta), r * math.sin(math.pi / 2 + theta)))
+            table.insert(notes, generate_linear_bullet_note(n, r * math.cos(math.pi * 3 / 2 + theta), r * math.sin(math.pi * 3 / 2 + theta)))
+        end
+    end
+end
+generate_notes()
 
 -- Set base positions
 -- Note since players aren't allowed to move around, 
@@ -16,11 +97,10 @@ player.y_base = 0
 -- Amusingly, `player.x_base, player.y_base = 0, 0` crashes the game
 
 -- beat 
-
 function current_beat()
     --- Get current beat in float
     -- not int because there can be beats that are not integer (e.g. 1/3 beats)
-    return bpm / 60 * (Time.time - encounter.start_time)
+    return bpm / 60 * (Time.time - encounter.start_time - time_offset)
     -- note that start_time should be defined when audio starts
 end
 
@@ -43,8 +123,16 @@ function create_effect(sprite, x, y)
     effect.type = 'effect'
     return effect
 end
-
 -- Main update loop
+
+function print_beat()
+    -- Print current beat once per beat
+    beat_counter = beat_counter or 0
+    if current_beat() > beat_counter then
+        DEBUG('BEAT ' .. tostring(beat_counter))
+        beat_counter = beat_counter + 1
+    end
+end
 
 function Update()
     -- players can't move
@@ -59,6 +147,7 @@ function Update()
         Audio.Stop()
         EndWave()
     end
+    print_beat()
 end
 
 function handle_keyboard_inputs()
@@ -94,19 +183,19 @@ function handle_keyboard_inputs()
 end
 
 function stomp()
-
+    DEBUG('stomped: ' .. tostring(current_beat()))
     -- Play sound
     Audio.PlaySound('stomp1')
 
     -- Add stomping animation
     -- Note it is registered as a projectile cuz sprites don't work
     local stomp_effect = create_effect('stomp_effect', player.x, player.y)
-    stomp_effect.lifespan = 30  -- lifespan frame
+    stomp_effect.lifespan = 20  -- lifespan frame
     table.insert(effects, stomp_effect)
     -- Delete bullets in radius
     for i = #bullets, 1, -1 do
         local bullet = bullets[i]
-        if math.abs(bullet.x - player.x) < 100 then
+        if distance(player, bullet) < 50 then
             bullet.Remove()
             table.remove(bullets, i)
         end
@@ -114,17 +203,15 @@ function stomp()
 end
 
 
-next_bullet_summon_time = 28
 function create_bullets()
     --- Create Bullets along the beat
-    if(current_beat() > next_bullet_summon_time) then
-        r = 300
-        bullet = create_bullet('bullet_circle', player.x + r, player.y)
-        bullet.vx = (player.x + 60 - bullet.x) / (8 * 60 / bpm * fps) -- 8 beat until it gets player
-        bullet.vx = -3
-        bullet.vy = 0
-        table.insert(bullets, bullet)
-        next_bullet_summon_time = next_bullet_summon_time + 2
+    for i, note in ipairs(notes) do
+        if (current_beat() >= note.start_beat) then
+            if not note.created then
+                note.create_bullets()
+                note.created = true
+            end
+        end
     end
 end
 
@@ -132,10 +219,15 @@ function update_bullets()
     -- iterate reverse since table is modified when removing
     for i = #bullets, 1, -1 do
         local bullet = bullets[i]
-        bullet.Move(bullet.vx, bullet.vy)
-        if bullet.x < -100 then
-            bullet.Remove()
-            table.remove(bullets, i)
+        bullet:update()
+        if bullet.lifespan ~= nil then
+            -- If lifespan is given, handle it
+            if (bullet.lifespan < 0) then
+                bullet.Remove()
+                table.remove(bullets, i)
+            else
+                bullet.lifespan = bullet.lifespan - 1
+            end
         end
     end
 end
@@ -143,11 +235,15 @@ end
 function update_effects()
     for i = #effects, 1, -1 do
         local effect = effects[i]
-        if(effect.lifespan < 0) then
-            effect.Remove()
-            table.remove(effects, i)
-        else
-            effect.lifespan = effect.lifespan - 1
+
+        -- If lifespan is given, handle it
+        if effect.lifespan ~= nil then
+            if(effect.lifespan < 0) then
+                effect.Remove()
+                table.remove(effects, i)
+            else
+                effect.lifespan = effect.lifespan - 1
+            end
         end
     end
 end
@@ -158,50 +254,5 @@ function OnHit(projectile)
         -- Ignore all effect type projectiles
         return
     end
-
-    bullet.vx = 0
-    bullet.vy = 0
-
     player.Hurt(1)
 end
-
--- Below is the original example code
-
--- You've seen this one in the trailer (if you've seen the trailer).
--- spawntimer = 0
--- bullets = {}
--- yOffset = 180
--- mult = 0.5
-
--- function Update()
---     spawntimer = spawntimer + 1
---     if(spawntimer % 30 == 0) then
---         local numbullets = 10
---         for i=1,numbullets+1 do
---             local bullet = CreateProjectile('bullet', 0, yOffset)
---             bullet.SetVar('timer', 0)
---             bullet.SetVar('offset', math.pi * 2 * i / numbullets)
---             bullet.SetVar('negmult', mult)
---             bullet.SetVar('lerp', 0)
---             table.insert(bullets, bullet)
---         end
---         mult = mult + 0.05
---     end
-
---     for i=1,#bullets do
---         local bullet = bullets[i]
---         local timer = bullet.GetVar('timer')
---         local offset = bullet.GetVar('offset')
---         local lerp = bullet.GetVar('lerp')
---         local neg = 1
---         local posx = (70*lerp)*math.sin(timer*bullet.GetVar('negmult') + offset)
---         local posy = (70*lerp)*math.cos(timer + offset) + yOffset - lerp*50
---         bullet.MoveTo(posx, posy)
---         bullet.SetVar('timer', timer + 1/40)
---         lerp = lerp + 1 / 90
---         if lerp > 4.0 then
---             lerp = 4.0
---         end
---         bullet.SetVar('lerp', lerp)
---     end
--- end

@@ -44,13 +44,14 @@
 --
 -- Put this file in /Libraries folder
 -- Put `require "better_var"` at the top of a script
+-- wrap any variable you want via `wrap()`
 -- You're good to go!
 
 
 -- Generic wrapping function
 -- You'll have to use this when you need to deal with original data types
 
--- Note this is slightly different from fallback table since it favors parent's key
+-- this is slightly different from fallback table since it favors parent's key
 -- Also note that child's key is favored over parent's key because __index does not get called
 -- if child's key exists, but since all new properties have to go through __newindex, child's key
 -- cannot exist if there is a parent's key.
