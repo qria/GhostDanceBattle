@@ -97,6 +97,73 @@ function generate_linear_bullet_note(beat, start_x, start_y, radius, sprite_name
     return note
 end
 
+function generate_rhythmic_linear_bullet_note(beat, start_x, start_y, radius, sprite_name, beat_until_collision, t_step) 
+    --- Rhythmic Linear Bullet Note
+    -- It's a linear bullet, but moves 
+    -- It was super hard to calcuate the position.
+    -- Calculations are in the file rhythmic_bullet_calculation.JPG somewhere in the folder
+
+    -- Argument parsing
+
+    local radius = radius or 4
+    local sprite_name = sprite_name or 'bullet_circle'
+    local beat_until_collision = beat_until_collision or 4
+    local grace_distance = 25
+    local bullet_speed = 200 -- pixel per beat
+    local t_step = t_step or 1
+
+    -- generate note
+    note = {}
+    note.beat = beat
+    note.beat_until_collision = beat_until_collision
+    note.start_beat = note.beat - beat_until_collision
+    note.sprite_name = sprite_name
+    note.start_x = start_x
+    note.start_y = start_y
+    note.bullet_speed = bullet_speed
+    note.radius = radius
+    note.t_step = t_step
+
+    note.create_bullets = function(self)
+        local bullet = create_bullet(self.sprite_name, self.start_x, self.start_y)
+        bullet.start = {x=self.start_x, y=self.start_y}
+        bullet.beat = self.beat -- beat at the time of collision
+        local s = distance(bullet.start, player)
+        local g = grace_distance
+        bullet.goal = {
+            x = (g * bullet.start.x + (s-g) * player.x) / s,
+            y = (g * bullet.start.y + (s-g) * player.y) / s
+        }
+        bullet.r = self.radius
+        bullet.n_beat = beat_until_collision
+        bullet.v = self.bullet_speed
+        bullet.t_step = self.t_step
+
+        bullet.update = function(self)
+            -- See rhythmic_bullet_calculation.JPG for explanation of paramters
+            local t = current_beat() - self.beat
+            local n = bullet.n_beat -- beat until collision
+            local d = distance(bullet.start, bullet.goal)
+            local v = bullet.v
+            local x0, y0 = bullet.start.x, bullet.start.y
+            local x1, y1 = bullet.goal.x, bullet.goal.y 
+            local t_step = bullet.t_step
+            local step = math.floor((t + d/n/2 / v) / t_step)
+            local tmp = ((t - n) + d/n/2 / v) % t_step
+            local f
+            if 0 <= tmp and tmp < d/n / v then
+                f = step * d/n + v * (t - t_step * step)
+            else
+                f = step * d/n + d/n/2
+            end
+            local x = x1 + (x1-x0) * (f/d)
+            local y = y1 + (y1-y0) * (f/d)
+            self.MoveTo(x, y)
+        end
+        table.insert(bullets, bullet)
+    end
+    return note
+end
 function generate_notes()
     r = 300
     for i, n in ipairs({32, 34, 36, 38, 40, 42, 44, 46, 
@@ -111,11 +178,11 @@ function generate_notes()
                         176, 177.5, 180, 181.5, 184, 185, 186, 186 + 2/3, 186 + 4/3, 188, 190, 
                         }) do
         theta = math.random() * math.pi
-        table.insert(notes, generate_linear_bullet_note(n, r * math.cos(theta), r * math.sin(theta)))
-        table.insert(notes, generate_linear_bullet_note(n, r * math.cos(math.pi + theta), r * math.sin(math.pi + theta)))
+        table.insert(notes, generate_rhythmic_linear_bullet_note(n, r * math.cos(theta), r * math.sin(theta)))
+        table.insert(notes, generate_rhythmic_linear_bullet_note(n, r * math.cos(math.pi + theta), r * math.sin(math.pi + theta)))
         if n >= 128 then
-            table.insert(notes, generate_linear_bullet_note(n, r * math.cos(math.pi / 2 +theta), r * math.sin(math.pi / 2 + theta)))
-            table.insert(notes, generate_linear_bullet_note(n, r * math.cos(math.pi * 3 / 2 + theta), r * math.sin(math.pi * 3 / 2 + theta)))
+            table.insert(notes, generate_rhythmic_linear_bullet_note(n, r * math.cos(math.pi / 2 +theta), r * math.sin(math.pi / 2 + theta)))
+            table.insert(notes, generate_rhythmic_linear_bullet_note(n, r * math.cos(math.pi * 3 / 2 + theta), r * math.sin(math.pi * 3 / 2 + theta)))
         end
     end
 end
@@ -155,6 +222,7 @@ protect_update()
 function update_per_beat(beat)
     -- print current beat
     log('Beat=', beat)
+
     -- Add heartbeat animation
     if beat % 2 == 0 then
         local heartbeat_effect = create_effect('heartbeat', player.x, player.y)
@@ -233,7 +301,7 @@ function create_bullets()
     for i, note in ipairs(notes) do
         if (current_beat() >= note.start_beat) then
             if not note.created then
-                note.create_bullets()
+                note:create_bullets()
                 note.created = true
             end
         end
@@ -286,5 +354,5 @@ function OnHit(projectile)
         -- Ignore all effect type projectiles
         return
     end
-    player.Hurt(1)
+    player.Hurt(2)
 end

@@ -55,7 +55,6 @@
 -- Also note that child's key is favored over parent's key because __index does not get called
 -- if child's key exists, but since all new properties have to go through __newindex, child's key
 -- cannot exist if there is a parent's key.
-
 function wrap(original_object)
     local new_object = {original_object=original_object}
     setmetatable(new_object, {
@@ -130,3 +129,15 @@ end
 
 encounter = wrap(Encounter)
 
+
+-- Global variable storage wrapper
+
+globals = {}
+setmetatable(globals, {
+    __index = function(table, key)
+            return GetGlobal(key)
+        end,
+    __newindex = function(table, key, value)
+            SetGlobal(key, value)
+        end
+    })

@@ -16,6 +16,13 @@ napstablook = {}
 
 enemypositions = {{0, 0}} -- meaningless cuz it's overwritten elsewhere
 
+function a(f)
+    return f()
+end
+
+function b()
+    return 'it works!'
+end
 function EncounterStarting()
     Player.name = 'Chara'
 
@@ -25,7 +32,6 @@ function EncounterStarting()
 
     -- Proc dialogue right away
     State('ENEMYDIALOGUE')
-
 end
 
 function Update()

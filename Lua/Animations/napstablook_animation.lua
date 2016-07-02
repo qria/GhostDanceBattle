@@ -1,16 +1,16 @@
--- Make napstablook wrapper object that has all the info of napstablook
--- btw, why can't sprite.SetVar('x') illegal? I don't understand
-if not napstablook then 
-    napstablook = {}
-end
+require "better_variables"
+require "better_debugging"
+
+-- Assumes napstablook object exists and is writeable 
 
 napstablook.sprite = CreateSprite("napstablook/Napstablook1")
 napstablook.sprite.y = 300
 napstablook.sprite.SetAnimation({"napstablook/Napstablook1", "napstablook/Napstablook2"}, 1)
-napstablook.x_base = 0
+napstablook.x_base = 250
 napstablook.y_base = 300
+
 function AnimateNapstablook()
-    napstablook.sprite.y = napstablook.y_base + 2 * math.cos(Time.time)
+    napstablook.sprite.y = napstablook.y_base + 20 * math.cos(Time.time)
 end
 
 -- --For usage, check out the encounter Lua's EncounterStarting() and Update() functions.
