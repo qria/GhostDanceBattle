@@ -1,4 +1,6 @@
 require "better_variables"
+require "better_debugging"
+
 
 -- Global effects
 effects = {}
@@ -22,6 +24,36 @@ function distance(p1, p2)
     return math.sqrt((p1.x-p2.x) * (p1.x-p2.x) + (p1.y-p2.y) * (p1.y-p2.y))
 end
 
+-- beat 
+function current_beat()
+    --- Get current beat in float
+    -- not int because there can be beats that are not integer (e.g. 1/3 beats)
+    return bpm / 60 * (Time.time - encounter.start_time - time_offset)
+    -- note that start_time should be defined when audio starts
+end
+
+
+-- Bullet wrapper
+
+function create_projectile(sprite, x, y)
+    local projectile = wrap(CreateProjectile(sprite, x, y))
+    projectile.created_time = Time.time
+    return projectile
+end
+
+function create_bullet(sprite, x, y)
+    local bullet = create_projectile(sprite, x, y)
+    bullet.type = 'bullet'
+    return bullet
+end
+
+function create_effect(sprite, x, y)
+    local effect = create_projectile(sprite, x, y)
+    effect.type = 'effect'
+    return effect
+end
+
+-- initialize notes
 
 function generate_linear_bullet_note(beat, start_x, start_y, radius, sprite_name, beat_until_collision) 
     --- Linear Bullet Note
@@ -96,58 +128,51 @@ player.x_base = 0
 player.y_base = 0
 -- Amusingly, `player.x_base, player.y_base = 0, 0` crashes the game
 
--- beat 
-function current_beat()
-    --- Get current beat in float
-    -- not int because there can be beats that are not integer (e.g. 1/3 beats)
-    return bpm / 60 * (Time.time - encounter.start_time - time_offset)
-    -- note that start_time should be defined when audio starts
-end
 
-
--- Bullet wrapper
-
-function create_projectile(sprite, x, y)
-    local projectile = wrap(CreateProjectile(sprite, x, y))
-    return projectile
-end
-
-function create_bullet(sprite, x, y)
-    local bullet = create_projectile(sprite, x, y)
-    bullet.type = 'bullet'
-    return bullet
-end
-
-function create_effect(sprite, x, y)
-    local effect = create_projectile(sprite, x, y)
-    effect.type = 'effect'
-    return effect
-end
 -- Main update loop
-
-function print_beat()
-    -- Print current beat once per beat
-    beat_counter = beat_counter or 0
-    if current_beat() > beat_counter then
-        DEBUG('BEAT ' .. tostring(beat_counter))
-        beat_counter = beat_counter + 1
-    end
-end
-
+update_counter = 0  -- current update number
 function Update()
+    update_counter = update_counter + 1
     -- players can't move
     player.MoveTo(player.x_base, player.y_base, false)
     handle_keyboard_inputs()
-
     create_bullets()
     update_bullets()
     update_effects()
 
+    -- Update once per beat
+
+    beat_counter = beat_counter or 0
+    if current_beat() > beat_counter then
+        update_per_beat(beat_counter)
+        beat_counter = beat_counter + 1
+    end
+end
+
+protect_update()
+
+
+function update_per_beat(beat)
+    -- print current beat
+    log('Beat=', beat)
+    -- Add heartbeat animation
+    if beat % 2 == 0 then
+        local heartbeat_effect = create_effect('heartbeat', player.x, player.y)
+        heartbeat_effect.lifespan = 3
+        heartbeat_effect.name = 'heartbeat'
+        heartbeat_effect.update = function(self)
+            -- Always move to on top of player
+            heartbeat_effect.sprite.x = player.absx
+            heartbeat_effect.sprite.y = player.absy
+        end
+        table.insert(effects, heartbeat_effect)
+    end
+
+    -- Check song end
     if current_beat() > song_end_beat then
         Audio.Stop()
         EndWave()
     end
-    print_beat()
 end
 
 function handle_keyboard_inputs()
@@ -160,7 +185,7 @@ function handle_keyboard_inputs()
 
     if(Input.Right == 1) then
         player.Move(4, 0)  -- Lean slightly right
-    elseif(Input.right == 2) then
+    elseif(Input.Right == 2) then
         player.Move(8, 0)  -- Lean right
     end
 
@@ -179,19 +204,20 @@ function handle_keyboard_inputs()
     -- Handle stomp last since it uses player.x, player.y
     if(Input.Confirm == 1) then
         stomp()
-    end
+    end 
 end
 
 function stomp()
-    DEBUG('stomped: ' .. tostring(current_beat()))
+    log('stomped:', current_beat())
     -- Play sound
     Audio.PlaySound('stomp1')
 
     -- Add stomping animation
-    -- Note it is registered as a projectile cuz sprites don't work
     local stomp_effect = create_effect('stomp_effect', player.x, player.y)
     stomp_effect.lifespan = 20  -- lifespan frame
+    stomp_effect.name = 'stomp' -- for debugging
     table.insert(effects, stomp_effect)
+
     -- Delete bullets in radius
     for i = #bullets, 1, -1 do
         local bullet = bullets[i]
@@ -201,7 +227,6 @@ function stomp()
         end
     end
 end
-
 
 function create_bullets()
     --- Create Bullets along the beat
@@ -233,18 +258,25 @@ function update_bullets()
 end
 
 function update_effects()
-    for i = #effects, 1, -1 do
+    local i = #effects 
+    while i >= 1 do  -- For some reason for loop here makes it so that it runs only the first iteration. It took me 8 hours to find this.
         local effect = effects[i]
+
+        -- If update is given, handle it
+        if effect.update then
+            effect:update()
+        end
 
         -- If lifespan is given, handle it
         if effect.lifespan ~= nil then
-            if(effect.lifespan < 0) then
+            if(effect.lifespan <= 0) then
                 effect.Remove()
                 table.remove(effects, i)
             else
                 effect.lifespan = effect.lifespan - 1
             end
         end
+        i = i - 1
     end
 end
 

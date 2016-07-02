@@ -1,7 +1,9 @@
+require "better_variables"
+
 music='empty'
 
 encountertext = "Napstablook" --Modify as necessary. It will only be read out in the action select screen.
-wavetimer = 9999999999
+wavetimer = math.huge 
 arenasize = {155, 130}
 nextwaves = {"dance_battle"}
 
@@ -18,19 +20,7 @@ function EncounterStarting()
     Player.name = 'Chara'
 
     -- Initialize napstablook object
-    -- if key lookup fails, consult fallback 
-    -- Since napstablook is mostly empty, you almost always fallback
-    napstablook.fallback = enemies[1]
-    setmetatable(napstablook, {
-        __index = function(table, key)
-            return table.fallback.GetVar(key)
-            end
-        ,
-        __newindex =
-         function(table, key, value)
-            table.fallback.SetVar(key, value)
-            end
-        })
+    napstablook = wrap(enemies[1])
     require "Animations/napstablook_animation" 
 
     -- Proc dialogue right away
@@ -63,9 +53,7 @@ function EnemyDialogueStarting()
 end
 
 function EnemyDialogueEnding()
-    -- nextwaves = { possible_attacks[math.random(#possible_attacks)] }
-
-    -- DefenseStarting()
+    -- Effectivly DefenseStarting()
     Audio.LoadFile('ghost_fight')
     start_time = Time.time
 end
