@@ -4,13 +4,18 @@ require "better_debugging"
 -- Assumes napstablook object exists and is writeable 
 
 napstablook.sprite = CreateSprite("napstablook/Napstablook1")
-napstablook.sprite.y = 300
 napstablook.sprite.SetAnimation({"napstablook/Napstablook1", "napstablook/Napstablook2"}, 1)
-napstablook.x_base = 250
-napstablook.y_base = 300
+napstablook.x_base = 320
+napstablook.y_base = 320
+napstablook.sprite.x = napstablook.x_base
+napstablook.sprite.y = napstablook.y_base
 
 function AnimateNapstablook()
+    napstablook.sprite.x = napstablook.x_base
     napstablook.sprite.y = napstablook.y_base + 20 * math.cos(Time.time)
+    -- -- lean
+    -- napstablook.sprite.x = napstablook.sprite.x - Player.x
+    -- napstablook.sprite.y = napstablook.sprite.y - Player.y
 end
 
 -- --For usage, check out the encounter Lua's EncounterStarting() and Update() functions.
